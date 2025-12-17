@@ -116,12 +116,6 @@ const config: Config = {
           position: 'left',
           label: 'Documentation',
         },
-        // Profile link (right side)
-        {
-          to: '/profile',
-          label: 'Profile',
-          position: 'right',
-        },
         // GitHub link
         {
           href: 'https://github.com/humanoid-robotics-book/humanoid-robotics-book',
