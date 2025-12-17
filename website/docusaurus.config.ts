@@ -38,8 +38,8 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          // Show reading time for docs
-          showLastUpdateTime: true,
+          // Disabled showLastUpdateTime due to Vercel git detection issues
+          showLastUpdateTime: false,
           // Edit URL for the repo
           editUrl:
             'https://github.com/humanoid-robotics-book/humanoid-robotics-book/tree/main/website/',
