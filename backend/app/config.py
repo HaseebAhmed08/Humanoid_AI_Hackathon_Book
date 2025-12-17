@@ -65,7 +65,7 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Server host")
     port: int = Field(default=8000, description="Server port")
     cors_origins: str = Field(
-        default="http://localhost:3000,http://127.0.0.1:3000",
+        default="http://localhost:3000,http://127.0.0.1:3000,https://website-60o3h8x2t-haseeb-ahmeds-projects-d5ee87b2.vercel.app,https://*.vercel.app",
         description="Comma-separated CORS origins",
     )
 

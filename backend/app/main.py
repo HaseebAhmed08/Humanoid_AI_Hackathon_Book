@@ -57,9 +57,9 @@ app = FastAPI(
     title="Physical AI & Humanoid Robotics Platform API",
     description="Backend API for the educational platform covering ROS 2, simulation, and AI integration.",
     version=__version__,
-    docs_url="/docs" if settings.is_development else None,
-    redoc_url="/redoc" if settings.is_development else None,
-    openapi_url="/openapi.json" if settings.is_development else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
 )
 
@@ -67,9 +67,10 @@ app = FastAPI(
 setup_exception_handlers(app)
 
 # Add CORS middleware
+# Allow all origins for flexibility with Vercel deployments
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

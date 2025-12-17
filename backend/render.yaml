@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: humanoid-robotics-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: COHERE_API_KEY
+        sync: false
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: QDRANT_COLLECTION
+        value: rag_embedding
+      - key: AI_PROVIDER
+        value: cohere
+      - key: EMBEDDING_MODEL
+        value: embed-english-v3.0
+      - key: CHAT_MODEL
+        value: command-r-08-2024
