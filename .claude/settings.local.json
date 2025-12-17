@@ -10,5 +10,10 @@
       "Bash(npm run clear:*)",
       "Bash(claude mcp:*)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "context7",
+    "github"
+  ],
+  "enableAllProjectMcpServers": true
 }
