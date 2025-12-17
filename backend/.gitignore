@@ -41,3 +41,6 @@ Thumbs.db
 
 # Local configuration (keep .env.example)
 .env.local
+
+.vercel
+.env*.local
