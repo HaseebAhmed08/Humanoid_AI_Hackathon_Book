@@ -8,12 +8,13 @@
       "Bash(powershell:*)",
       "Bash(npm start)",
       "Bash(npm run clear:*)",
-      "Bash(claude mcp:*)"
+      "Bash(claude mcp:*)",
+      "Bash(curl:*)"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "context7",
     "github"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

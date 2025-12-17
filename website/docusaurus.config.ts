@@ -26,6 +26,11 @@ const config: Config = {
 
   onBrokenLinks: 'throw',
 
+  // Custom fields for runtime configuration
+  customFields: {
+    apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
+  },
+
   // Internationalization
   i18n: {
     defaultLocale: 'en',

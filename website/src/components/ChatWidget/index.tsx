@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import styles from './styles.module.css';
 
 interface Source {
@@ -23,9 +24,11 @@ interface ChatWidgetProps {
 }
 
 export default function ChatWidget({
-  apiUrl = 'http://localhost:8000/api',
+  apiUrl: propApiUrl,
   contextChapter,
 }: ChatWidgetProps): JSX.Element {
+  const { siteConfig } = useDocusaurusContext();
+  const apiUrl = propApiUrl || (siteConfig.customFields?.apiUrl as string) || 'http://localhost:8000/api';
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
