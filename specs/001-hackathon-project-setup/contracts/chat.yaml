@@ -1,0 +1,234 @@
+openapi: 3.0.3
+info:
+  title: Chat API
+  description: RAG-powered chatbot endpoints
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Main API server
+
+paths:
+  /chat/sessions:
+    post:
+      summary: Create new chat session
+      operationId: createChatSession
+      tags: [Chat]
+      security:
+        - bearerAuth: []
+        - {}  # Also allows anonymous
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSession'
+
+  /chat/sessions/{sessionId}:
+    get:
+      summary: Get chat session with messages
+      operationId: getChatSession
+      tags: [Chat]
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session with messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionWithMessages'
+        '404':
+          description: Session not found
+
+  /chat/sessions/{sessionId}/messages:
+    post:
+      summary: Send message and get AI response
+      operationId: sendMessage
+      tags: [Chat]
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '200':
+          description: AI response with sources
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+        '400':
+          description: Invalid message
+        '404':
+          description: Session not found
+        '429':
+          description: Rate limit exceeded
+
+  /chat/ask:
+    post:
+      summary: Quick question (no session, stateless)
+      operationId: askQuestion
+      tags: [Chat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuickQuestionRequest'
+      responses:
+        '200':
+          description: AI response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+        '429':
+          description: Rate limit exceeded
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateSessionRequest:
+      type: object
+      properties:
+        contextChapter:
+          type: string
+          description: Current chapter path for context
+          example: /docs/module-1-ros/nodes-topics
+
+    ChatSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+        contextChapter:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+
+    ChatSessionWithMessages:
+      allOf:
+        - $ref: '#/components/schemas/ChatSession'
+        - type: object
+          properties:
+            messages:
+              type: array
+              items:
+                $ref: '#/components/schemas/ChatMessage'
+
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+        sources:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/Source'
+        createdAt:
+          type: string
+          format: date-time
+
+    SendMessageRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: What is a ROS 2 node?
+
+    QuickQuestionRequest:
+      type: object
+      required:
+        - question
+      properties:
+        question:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        contextChapter:
+          type: string
+          description: Optional chapter context for better answers
+
+    ChatResponse:
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/ChatMessage'
+        processingTime:
+          type: number
+          description: Response time in milliseconds
+        tokensUsed:
+          type: integer
+          description: Total tokens consumed
+
+    Source:
+      type: object
+      properties:
+        chapter:
+          type: string
+          description: Chapter title
+          example: "Understanding Nodes and Topics"
+        section:
+          type: string
+          description: Section heading
+          example: "Node Lifecycle"
+        url:
+          type: string
+          format: uri
+          description: Direct link to source
+          example: "/docs/module-1-ros/nodes-topics#lifecycle"
+        relevanceScore:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: How relevant this source is (0-1)
+          example: 0.89
+        snippet:
+          type: string
+          description: Relevant text excerpt
+          maxLength: 500

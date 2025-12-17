@@ -1,0 +1,194 @@
+openapi: 3.0.3
+info:
+  title: Translation API
+  description: On-demand chapter translation endpoints
+  version: 1.0.0
+
+servers:
+  - url: /api
+    description: Main API server
+
+paths:
+  /translate:
+    post:
+      summary: Translate chapter content to Urdu
+      operationId: translateChapter
+      tags: [Translation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslateRequest'
+      responses:
+        '200':
+          description: Translation successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslateResponse'
+        '400':
+          description: Invalid request
+        '404':
+          description: Chapter not found
+        '503':
+          description: Translation service unavailable
+
+  /translate/status:
+    get:
+      summary: Check translation service health
+      operationId: getTranslationStatus
+      tags: [Translation]
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceStatus'
+
+  /translate/cache/{chapterPath}:
+    get:
+      summary: Get cached translation if available
+      operationId: getCachedTranslation
+      tags: [Translation]
+      parameters:
+        - name: chapterPath
+          in: path
+          required: true
+          schema:
+            type: string
+          description: URL-encoded chapter path
+          example: module-1-ros%2Fnodes-topics
+        - name: targetLanguage
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ur]
+      responses:
+        '200':
+          description: Cached translation found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CachedTranslation'
+        '404':
+          description: No cached translation available
+
+    delete:
+      summary: Invalidate cached translation
+      operationId: invalidateCache
+      tags: [Translation]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: chapterPath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cache invalidated
+        '401':
+          description: Not authenticated
+        '403':
+          description: Not authorized (admin only)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    TranslateRequest:
+      type: object
+      required:
+        - chapterPath
+        - targetLanguage
+      properties:
+        chapterPath:
+          type: string
+          description: Path to the chapter (e.g., module-1-ros/nodes-topics)
+          example: module-1-ros/nodes-topics
+        targetLanguage:
+          type: string
+          enum: [ur]
+          description: Target language code
+        content:
+          type: string
+          description: Optional - raw content to translate (if not fetching from path)
+        forceRefresh:
+          type: boolean
+          default: false
+          description: Bypass cache and generate fresh translation
+
+    TranslateResponse:
+      type: object
+      properties:
+        originalPath:
+          type: string
+        targetLanguage:
+          type: string
+        translatedContent:
+          type: string
+          description: Translated Markdown content
+        fromCache:
+          type: boolean
+          description: Whether this was served from cache
+        processingTime:
+          type: number
+          description: Translation time in milliseconds (0 if cached)
+        preservedTerms:
+          type: array
+          items:
+            type: string
+          description: Technical terms kept in English
+          example: ["ROS 2", "Node", "Topic", "Publisher"]
+
+    CachedTranslation:
+      type: object
+      properties:
+        chapterPath:
+          type: string
+        targetLanguage:
+          type: string
+        translatedContent:
+          type: string
+        contentHash:
+          type: string
+          description: Hash of original content (for staleness check)
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        isStale:
+          type: boolean
+          description: True if original content has changed
+
+    ServiceStatus:
+      type: object
+      properties:
+        available:
+          type: boolean
+        provider:
+          type: string
+          enum: [claude, openai]
+        cacheStats:
+          type: object
+          properties:
+            totalCached:
+              type: integer
+            hitRate:
+              type: number
+              description: Cache hit rate (0-1)
+        lastError:
+          type: string
+          nullable: true
+          description: Last error message if service degraded

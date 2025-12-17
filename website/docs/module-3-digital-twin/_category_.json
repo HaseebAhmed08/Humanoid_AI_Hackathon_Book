@@ -1,0 +1,8 @@
+{
+  "label": "Module 3: Digital Twin",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Create virtual replicas of physical robots for testing, monitoring, and predictive maintenance."
+  }
+}

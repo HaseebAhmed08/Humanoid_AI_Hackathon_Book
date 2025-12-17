@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch:*)",
+      "Bash(findstr:*)",
+      "Bash(dir:*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \".specify/scripts/powershell/check-prerequisites.ps1\" -Json)",
+      "Bash(powershell:*)",
+      "Bash(npm start)",
+      "Bash(npm run clear:*)",
+      "Bash(claude mcp:*)"
+    ]
+  }
+}
