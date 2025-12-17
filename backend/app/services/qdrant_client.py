@@ -47,16 +47,19 @@ def ensure_collection_exists(client: QdrantClient) -> None:
     """
     collection_name = settings.qdrant_collection
 
+    # Determine vector size based on provider
+    vector_size = 1024 if settings.ai_provider.lower() == "cohere" else 1536
+
     try:
         collections = client.get_collections()
         collection_names = [c.name for c in collections.collections]
 
         if collection_name not in collection_names:
-            logger.info(f"Creating collection: {collection_name}")
+            logger.info(f"Creating collection: {collection_name} with {vector_size}-dim vectors")
             client.create_collection(
                 collection_name=collection_name,
                 vectors_config=qmodels.VectorParams(
-                    size=1536,  # OpenAI text-embedding-3-small dimensions
+                    size=vector_size,
                     distance=qmodels.Distance.COSINE,
                 ),
             )
@@ -101,13 +104,13 @@ def search_similar(
             ]
         )
 
-    results = client.search(
+    results = client.query_points(
         collection_name=settings.qdrant_collection,
-        query_vector=query_vector,
+        query=query_vector,
         limit=limit,
         score_threshold=score_threshold,
         query_filter=search_filter,
-    )
+    ).points
 
     return [
         {

@@ -22,6 +22,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 import time
+from pathlib import Path
+import re
 
 import requests
 from bs4 import BeautifulSoup
@@ -459,6 +461,101 @@ def get_all_urls(base_url: str) -> list:
     return urls
 
 
+def get_local_docs(docs_dir: str) -> list:
+    """
+    Get all local documentation files from the docs directory.
+
+    Args:
+        docs_dir: Path to the docs directory
+
+    Returns:
+        list[dict]: List of dicts with path and relative_path for each doc file
+    """
+    docs_path = Path(docs_dir)
+    if not docs_path.exists():
+        raise ValueError(f"Docs directory not found: {docs_dir}")
+
+    files = []
+    for ext in ['*.md', '*.mdx']:
+        for file_path in docs_path.rglob(ext):
+            # Skip category files
+            if file_path.name.startswith('_'):
+                continue
+            files.append({
+                'path': str(file_path),
+                'relative_path': str(file_path.relative_to(docs_path))
+            })
+
+    logger.info(f"Found {len(files)} local doc files")
+    return files
+
+
+def extract_text_from_mdx(file_path: str) -> dict:
+    """
+    Extract clean text content from MDX/Markdown file.
+
+    Args:
+        file_path: Path to the MDX file
+
+    Returns:
+        dict: Contains path, title, text, and extracted_at timestamp
+    """
+    logger.info(f"Extracting text from: {file_path}")
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Extract title from frontmatter or first heading
+    title = ""
+
+    # Try frontmatter
+    frontmatter_match = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
+    if frontmatter_match:
+        fm = frontmatter_match.group(1)
+        title_match = re.search(r'^title:\s*["\']?(.+?)["\']?\s*$', fm, re.MULTILINE)
+        if title_match:
+            title = title_match.group(1)
+        # Remove frontmatter from content
+        content = content[frontmatter_match.end():]
+
+    # Fallback to first heading
+    if not title:
+        heading_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+        if heading_match:
+            title = heading_match.group(1)
+
+    # Remove MDX/JSX components
+    content = re.sub(r'<[^>]+/?>', '', content)
+    content = re.sub(r'import\s+.*?from\s+["\'].*?["\'];?\s*\n?', '', content)
+    content = re.sub(r'export\s+.*?;?\s*\n?', '', content)
+
+    # Remove code blocks but keep inline code
+    content = re.sub(r'```[\s\S]*?```', '', content)
+
+    # Remove markdown formatting but keep text
+    content = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', content)  # Links
+    content = re.sub(r'!\[([^\]]*)\]\([^)]+\)', '', content)  # Images
+    content = re.sub(r'[*_]{1,2}([^*_]+)[*_]{1,2}', r'\1', content)  # Bold/italic
+    content = re.sub(r'^#{1,6}\s+', '', content, flags=re.MULTILINE)  # Headings
+    content = re.sub(r'^[-*+]\s+', '', content, flags=re.MULTILINE)  # Lists
+    content = re.sub(r'^\d+\.\s+', '', content, flags=re.MULTILINE)  # Numbered lists
+
+    # Clean up whitespace
+    content = ' '.join(content.split())
+
+    if not content:
+        raise ValueError(f"No content could be extracted from {file_path}")
+
+    logger.info(f"Extracted {len(content)} characters from {file_path}")
+
+    return {
+        "url": f"file://{file_path}",
+        "title": title,
+        "text": content,
+        "extracted_at": datetime.utcnow().isoformat() + "Z"
+    }
+
+
 def test_retrieval(config: dict, query: str = "What is ROS 2?", limit: int = 3) -> list:
     """
     Test retrieval by querying Qdrant with a sample question.
@@ -479,11 +576,11 @@ def test_retrieval(config: dict, query: str = "What is ROS 2?", limit: int = 3) 
     client = get_qdrant_client(config)
     collection_name = config.get("collection_name", DEFAULT_COLLECTION_NAME)
 
-    results = client.search(
+    results = client.query_points(
         collection_name=collection_name,
-        query_vector=query_embedding,
+        query=query_embedding,
         limit=limit
-    )
+    ).points
 
     print(f"\n{'='*60}")
     print(f"Query: {query}")
@@ -499,12 +596,14 @@ def test_retrieval(config: dict, query: str = "What is ROS 2?", limit: int = 3) 
     return results
 
 
-def main(dry_run: bool = False):
+def main(dry_run: bool = False, use_local: bool = False, docs_dir: str = None):
     """
     Main pipeline execution function.
 
     Args:
-        dry_run: If True, only print URLs without processing
+        dry_run: If True, only print files/URLs without processing
+        use_local: If True, use local MDX files instead of URLs
+        docs_dir: Path to local docs directory (required if use_local=True)
     """
     print("\n" + "="*60)
     print("Embeddings to Qdrant Pipeline")
@@ -520,15 +619,24 @@ def main(dry_run: bool = False):
         print("See .env.example for template.")
         return
 
-    # Get URLs to process
-    base_url = config.get("base_url", DEFAULT_BASE_URL)
-    urls = get_all_urls(base_url)
+    # Get sources to process
+    if use_local:
+        if not docs_dir:
+            # Default to ../website/docs relative to this script
+            script_dir = Path(__file__).parent
+            docs_dir = script_dir.parent / "website" / "docs"
+        sources = get_local_docs(str(docs_dir))
+        source_type = "local"
+    else:
+        base_url = config.get("base_url", DEFAULT_BASE_URL)
+        sources = [{"path": url, "relative_path": url} for url in get_all_urls(base_url)]
+        source_type = "url"
 
     if dry_run:
-        print("\n[DRY RUN] URLs that would be processed:")
-        for url in urls:
-            print(f"  - {url}")
-        print(f"\nTotal: {len(urls)} URLs")
+        print(f"\n[DRY RUN] {'Files' if use_local else 'URLs'} that would be processed:")
+        for src in sources:
+            print(f"  - {src['path']}")
+        print(f"\nTotal: {len(sources)} {'files' if use_local else 'URLs'}")
         return
 
     # Create/verify collection
@@ -539,21 +647,25 @@ def main(dry_run: bool = False):
         logger.error(f"Failed to initialize collection: {e}")
         return
 
-    # Process each URL
+    # Process each source
     success_count = 0
     failure_count = 0
     total_chunks = 0
 
-    for url in urls:
+    for src in sources:
+        source_path = src['path']
         try:
-            # Extract text
-            content = extract_text_from_url(url)
+            # Extract text based on source type
+            if use_local:
+                content = extract_text_from_mdx(source_path)
+            else:
+                content = extract_text_from_url(source_path)
 
             # Chunk text
             chunks = chunk_text(content["text"], config.get("chunk_size"), config.get("chunk_overlap"))
 
             if not chunks:
-                logger.warning(f"No chunks generated for {url}")
+                logger.warning(f"No chunks generated for {source_path}")
                 continue
 
             # Generate embeddings
@@ -561,22 +673,22 @@ def main(dry_run: bool = False):
             embeddings = embed(texts, config)
 
             # Save to Qdrant
-            count = save_chunk_to_qdrant(chunks, embeddings, url, config, collection_name)
+            count = save_chunk_to_qdrant(chunks, embeddings, content["url"], config, collection_name)
 
             total_chunks += count
             success_count += 1
-            print(f"✓ {url}: {count} chunks indexed")
+            print(f"[OK] {source_path}: {count} chunks indexed")
 
         except Exception as e:
             failure_count += 1
-            print(f"✗ {url}: {e}")
-            logger.exception(f"Failed to process {url}")
+            print(f"[FAIL] {source_path}: {e}")
+            logger.exception(f"Failed to process {source_path}")
 
     # Summary report
     print("\n" + "="*60)
     print("SUMMARY")
     print("="*60)
-    print(f"URLs processed: {success_count + failure_count}")
+    print(f"{'Files' if use_local else 'URLs'} processed: {success_count + failure_count}")
     print(f"  Successful: {success_count}")
     print(f"  Failed: {failure_count}")
     print(f"Total chunks indexed: {total_chunks}")
@@ -593,4 +705,12 @@ if __name__ == "__main__":
     import sys
 
     dry_run = "--dry-run" in sys.argv
-    main(dry_run=dry_run)
+    use_local = "--local" in sys.argv
+
+    # Parse docs_dir argument
+    docs_dir = None
+    for arg in sys.argv:
+        if arg.startswith("--docs-dir="):
+            docs_dir = arg.split("=", 1)[1]
+
+    main(dry_run=dry_run, use_local=use_local, docs_dir=docs_dir)

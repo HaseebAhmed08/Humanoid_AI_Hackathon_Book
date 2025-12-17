@@ -42,6 +42,10 @@ class Settings(BaseSettings):
         default=None,
         description="OpenAI API key for embeddings and chat",
     )
+    cohere_api_key: str | None = Field(
+        default=None,
+        description="Cohere API key for embeddings and chat",
+    )
     anthropic_api_key: str | None = Field(
         default=None,
         description="Anthropic API key for translation",
@@ -67,16 +71,22 @@ class Settings(BaseSettings):
 
     # Model Configuration
     embedding_model: str = Field(
-        default="text-embedding-3-small",
-        description="OpenAI embedding model",
+        default="embed-english-v3.0",
+        description="Cohere embedding model",
     )
     chat_model: str = Field(
-        default="gpt-4o-mini",
-        description="OpenAI chat model",
+        default="command-r-plus",
+        description="Cohere chat model",
     )
     translation_model: str = Field(
         default="claude-3-haiku-20240307",
         description="Anthropic translation model",
+    )
+
+    # AI Provider selection
+    ai_provider: str = Field(
+        default="cohere",
+        description="AI provider to use: 'openai' or 'cohere'",
     )
 
     class Config:

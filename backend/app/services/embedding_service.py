@@ -1,5 +1,5 @@
 """
-Embedding service using OpenAI's text-embedding-3-small model.
+Embedding service supporting both OpenAI and Cohere models.
 
 Provides text embedding generation for RAG.
 """
@@ -8,7 +8,6 @@ import logging
 from functools import lru_cache
 from typing import List
 
-from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.config import get_settings
@@ -21,10 +20,20 @@ class EmbeddingService:
     """Service for generating text embeddings."""
 
     def __init__(self):
-        """Initialize the embedding service."""
-        self.client = OpenAI(api_key=settings.openai_api_key)
+        """Initialize the embedding service based on configured provider."""
+        self.provider = settings.ai_provider.lower()
         self.model = settings.embedding_model
-        self.dimension = 1536  # text-embedding-3-small dimension
+
+        if self.provider == "cohere":
+            import cohere
+            self.client = cohere.Client(api_key=settings.cohere_api_key)
+            self.dimension = 1024  # Cohere embed-english-v3.0 dimension
+        else:
+            from openai import OpenAI
+            self.client = OpenAI(api_key=settings.openai_api_key)
+            self.dimension = 1536  # OpenAI text-embedding-3-small dimension
+
+        logger.info(f"Embedding service initialized with {self.provider} provider")
 
     @retry(
         stop=stop_after_attempt(3),
@@ -43,19 +52,26 @@ class EmbeddingService:
         if not text or not text.strip():
             raise ValueError("Text cannot be empty")
 
-        # Truncate if too long (8191 tokens max for text-embedding-3-small)
-        # Rough estimate: 4 chars per token
-        max_chars = 8191 * 4
+        # Truncate if too long
+        max_chars = 8191 * 4  # Rough estimate
         if len(text) > max_chars:
             text = text[:max_chars]
             logger.warning(f"Text truncated to {max_chars} characters")
 
-        response = self.client.embeddings.create(
-            model=self.model,
-            input=text,
-        )
-
-        return response.data[0].embedding
+        if self.provider == "cohere":
+            response = self.client.embed(
+                texts=[text],
+                model=self.model,
+                input_type="search_query",
+                embedding_types=["float"],
+            )
+            return response.embeddings.float[0]
+        else:
+            response = self.client.embeddings.create(
+                model=self.model,
+                input=text,
+            )
+            return response.data[0].embedding
 
     @retry(
         stop=stop_after_attempt(3),
@@ -79,21 +95,39 @@ class EmbeddingService:
         if not valid_texts:
             raise ValueError("No valid texts to embed")
 
-        # Batch size limit for OpenAI
-        batch_size = 100
-        all_embeddings = []
+        if self.provider == "cohere":
+            # Cohere batch size limit is 96
+            batch_size = 96
+            all_embeddings = []
 
-        for i in range(0, len(valid_texts), batch_size):
-            batch = valid_texts[i : i + batch_size]
-            response = self.client.embeddings.create(
-                model=self.model,
-                input=batch,
-            )
-            batch_embeddings = [item.embedding for item in response.data]
-            all_embeddings.extend(batch_embeddings)
+            for i in range(0, len(valid_texts), batch_size):
+                batch = valid_texts[i : i + batch_size]
+                response = self.client.embed(
+                    texts=batch,
+                    model=self.model,
+                    input_type="search_document",
+                    embedding_types=["float"],
+                )
+                all_embeddings.extend(response.embeddings.float)
 
-        logger.info(f"Generated {len(all_embeddings)} embeddings")
-        return all_embeddings
+            logger.info(f"Generated {len(all_embeddings)} embeddings with Cohere")
+            return all_embeddings
+        else:
+            # OpenAI batch size limit is 100
+            batch_size = 100
+            all_embeddings = []
+
+            for i in range(0, len(valid_texts), batch_size):
+                batch = valid_texts[i : i + batch_size]
+                response = self.client.embeddings.create(
+                    model=self.model,
+                    input=batch,
+                )
+                batch_embeddings = [item.embedding for item in response.data]
+                all_embeddings.extend(batch_embeddings)
+
+            logger.info(f"Generated {len(all_embeddings)} embeddings with OpenAI")
+            return all_embeddings
 
     def compute_similarity(
         self, embedding1: List[float], embedding2: List[float]
