@@ -138,15 +138,27 @@ while remaining accessible to beginners."""
         """
         start_time = time.perf_counter()
 
-        # Generate embedding for the question
-        question_embedding = self.embedding_service.embed_text(question)
+        try:
+            # Generate embedding for the question
+            logger.info(f"Generating embedding for question: {question[:50]}...")
+            question_embedding = self.embedding_service.embed_text(question)
+            logger.info(f"Embedding generated with {len(question_embedding)} dimensions")
+        except Exception as e:
+            logger.error(f"Failed to generate embedding: {e}")
+            raise
 
-        # Search for relevant chunks
-        search_results = search_similar(
-            query_vector=question_embedding,
-            limit=max_sources,
-            score_threshold=0.5,
-        )
+        try:
+            # Search for relevant chunks with lower threshold to ensure results
+            logger.info("Searching for relevant chunks...")
+            search_results = search_similar(
+                query_vector=question_embedding,
+                limit=max_sources,
+                score_threshold=0.3,  # Lowered from 0.5 to capture more relevant results
+            )
+            logger.info(f"Found {len(search_results)} relevant chunks")
+        except Exception as e:
+            logger.error(f"Vector search failed: {e}")
+            search_results = []
 
         # Build prompts
         system_prompt = self._build_system_prompt()
@@ -157,29 +169,42 @@ while remaining accessible to beginners."""
         )
 
         # Generate response based on provider
-        if self.provider == "cohere":
-            response = self.client.chat(
-                model=self.chat_model,
-                message=user_prompt,
-                preamble=system_prompt,
-                temperature=0.7,
-                max_tokens=1500,
-            )
-            answer = response.text
-            # Cohere doesn't provide exact token count in same way
-            tokens_used = len(user_prompt.split()) + len(answer.split())
-        else:
-            response = self.client.chat.completions.create(
-                model=self.chat_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                temperature=0.7,
-                max_tokens=1500,
-            )
-            answer = response.choices[0].message.content
-            tokens_used = response.usage.total_tokens if response.usage else 0
+        try:
+            logger.info(f"Generating response using {self.provider} ({self.chat_model})...")
+            if self.provider == "cohere":
+                response = self.client.chat(
+                    model=self.chat_model,
+                    message=user_prompt,
+                    preamble=system_prompt,
+                    temperature=0.7,
+                    max_tokens=1500,
+                )
+                answer = response.text
+                if not answer:
+                    logger.warning("Cohere returned empty response")
+                    answer = "I apologize, but I couldn't generate a response. Please try rephrasing your question."
+                # Cohere doesn't provide exact token count in same way
+                tokens_used = len(user_prompt.split()) + len(answer.split())
+            else:
+                response = self.client.chat.completions.create(
+                    model=self.chat_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    temperature=0.7,
+                    max_tokens=1500,
+                )
+                answer = response.choices[0].message.content
+                if not answer:
+                    logger.warning("OpenAI returned empty response")
+                    answer = "I apologize, but I couldn't generate a response. Please try rephrasing your question."
+                tokens_used = response.usage.total_tokens if response.usage else 0
+            logger.info(f"Response generated: {len(answer)} characters")
+        except Exception as e:
+            logger.error(f"LLM call failed: {e}")
+            answer = f"I'm sorry, I encountered an error while processing your question. Error: {str(e)}"
+            tokens_used = 0
 
         # Build sources list
         sources = []

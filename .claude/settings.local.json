@@ -9,7 +9,8 @@
       "Bash(npm start)",
       "Bash(npm run clear:*)",
       "Bash(claude mcp:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(python:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

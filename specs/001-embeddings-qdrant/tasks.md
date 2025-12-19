@@ -111,7 +111,7 @@
 - [x] T027 [P] Add docstrings to all functions in `backend/main.py` with Args, Returns, and Example sections
 - [x] T028 [P] Create `backend/README.md` with usage instructions, environment setup, and example commands
 - [x] T029 Implement `test_retrieval()` function in `backend/main.py` - query Qdrant with sample question, print results (for manual verification)
-- [ ] T030 Run full pipeline end-to-end with all book URLs and verify embeddings in Qdrant
+- [x] T030 Run full pipeline end-to-end with all book URLs and verify embeddings in Qdrant
 - [x] T031 Add `--dry-run` CLI flag to `main()` that prints URLs without processing (optional enhancement)
 
 ---

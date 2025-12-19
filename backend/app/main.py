@@ -116,6 +116,7 @@ async def health_check():
         services["database"] = "unhealthy"
 
     # Check Qdrant (if configured)
+    qdrant_points = 0
     if settings.qdrant_url:
         try:
             from qdrant_client import QdrantClient
@@ -124,8 +125,20 @@ async def health_check():
                 url=settings.qdrant_url,
                 api_key=settings.qdrant_api_key,
             )
-            client.get_collections()
+            collections = client.get_collections()
             services["qdrant"] = "healthy"
+
+            # Check if the RAG collection has documents
+            try:
+                collection_info = client.get_collection(settings.qdrant_collection)
+                qdrant_points = collection_info.points_count
+                services["qdrant_collection"] = f"{settings.qdrant_collection}: {qdrant_points} documents"
+                if qdrant_points == 0:
+                    logger.warning(f"Qdrant collection '{settings.qdrant_collection}' is EMPTY - RAG will not work!")
+                    services["qdrant_warning"] = "Collection is empty - run ingestion pipeline"
+            except Exception as e:
+                logger.warning(f"Collection '{settings.qdrant_collection}' not found: {e}")
+                services["qdrant_warning"] = f"Collection '{settings.qdrant_collection}' not found - run ingestion pipeline"
         except Exception as e:
             logger.warning(f"Qdrant health check failed: {e}")
             services["qdrant"] = "unhealthy"

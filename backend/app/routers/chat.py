@@ -132,7 +132,14 @@ async def send_message(
         )
         return response
     except ValueError as e:
+        logger.error(f"Session not found: {session_id}")
         raise NotFoundError("Chat session", str(session_id))
+    except Exception as e:
+        logger.exception(f"Error processing message for session {session_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process message: {str(e)}"
+        )
 
 
 @router.post(
@@ -150,11 +157,19 @@ async def ask_question(
     This is a stateless endpoint for quick queries. For conversation
     history and context, use the session-based endpoints instead.
     """
-    response = await service.quick_ask(
-        question=request.question,
-        context_chapter=request.context_chapter,
-    )
-    return response
+    try:
+        logger.info(f"Quick ask received: {request.question[:50]}...")
+        response = await service.quick_ask(
+            question=request.question,
+            context_chapter=request.context_chapter,
+        )
+        return response
+    except Exception as e:
+        logger.exception(f"Error processing quick question: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process question: {str(e)}"
+        )
 
 
 @router.delete(
