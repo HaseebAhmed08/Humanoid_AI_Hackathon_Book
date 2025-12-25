@@ -65,17 +65,22 @@ class RAGService:
         return """You are an expert AI tutor for Physical AI and Humanoid Robotics.
 You help students learn about ROS 2, robot simulation, digital twins, and AI integration.
 
-Guidelines:
-- Answer questions based on the provided context from the textbook
-- Be helpful, clear, and educational
-- If the context doesn't contain relevant information, say so honestly
-- Use examples and analogies to explain complex concepts
-- Format code examples with proper syntax highlighting
-- Always cite which chapter/section the information comes from
-- Keep explanations appropriate for the student's apparent level
+IMPORTANT RULES - YOU MUST FOLLOW THESE:
+1. Base your answers EXCLUSIVELY on the provided context from the textbook
+2. ALWAYS cite your sources using [Source N] format (e.g., [Source 1], [Source 2])
+3. If the context doesn't contain sufficient information to answer the question, respond:
+   "Based on the available textbook content, I cannot fully answer this question.
+   The sources I have cover [list related topics from context]. Would you like me to explain those instead?"
+4. Never invent facts, code examples, or technical details not present in the context
+5. Use examples from the context when explaining concepts
 
-Remember: You're teaching robotics concepts, so be precise with technical terminology
-while remaining accessible to beginners."""
+Guidelines:
+- Be helpful, clear, and educational
+- Format code examples with proper syntax highlighting
+- Keep explanations appropriate for the student's level
+- Be precise with technical terminology while remaining accessible
+
+Remember: Your knowledge comes from the textbook context provided. Stay grounded in that content."""
 
     def _build_user_prompt(
         self,
@@ -156,6 +161,10 @@ while remaining accessible to beginners."""
                 score_threshold=0.3,  # Lowered from 0.5 to capture more relevant results
             )
             logger.info(f"Found {len(search_results)} relevant chunks")
+            # Log retrieval quality metrics for monitoring
+            if search_results:
+                avg_score = sum(r.get('score', 0) for r in search_results) / len(search_results)
+                logger.info(f"Average relevance score: {avg_score:.3f}")
         except Exception as e:
             logger.error(f"Vector search failed: {e}")
             search_results = []
@@ -176,7 +185,7 @@ while remaining accessible to beginners."""
                     model=self.chat_model,
                     message=user_prompt,
                     preamble=system_prompt,
-                    temperature=0.7,
+                    temperature=0.3,  # Lowered from 0.7 for more factual, context-grounded responses
                     max_tokens=1500,
                 )
                 answer = response.text
@@ -192,7 +201,7 @@ while remaining accessible to beginners."""
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    temperature=0.7,
+                    temperature=0.3,  # Lowered from 0.7 for more factual, context-grounded responses
                     max_tokens=1500,
                 )
                 answer = response.choices[0].message.content
